@@ -15,16 +15,15 @@
   <div class="max-w-3xl mx-auto p-6">
     <header class="mb-6">
       <h1 class="text-2xl font-semibold">Public Holiday Decision Helper</h1>
-      <p class="text-sm text-gray-600 mt-1">
-        Use the options below to help you to navigate your decision for how to use a public holiday and to send your request to your team lead.
-      </p>
     </header>
 
     <div id="app"></div>
 
     <footer class="mt-10 text-xs text-gray-500">
       <p>
-        You should copy and paste the above to use within your email request for your team lead.
+        Assumptions: Volunteered work on a public holiday can be banked and used later in the same
+        calendar year with manager confirmation. Replacement rules differ by country and are applied
+        automatically based on your selection above.
       </p>
     </footer>
   </div>
@@ -55,31 +54,28 @@ function labelForDay(key) {
 }
 
 function parseDate(str) {
-  // MMDDYYYY -> Date or null
-  if (!/^\d{8}$/.test(str)) return null;
-  const mm = Number(str.slice(0,2));
-  const dd = Number(str.slice(2,4));
-  const yyyy = Number(str.slice(4,8));
-  const d = new Date(yyyy, mm - 1, dd);
-  if (isNaN(d.getTime())) return null;
-  // basic sanity check: JS will auto-roll invalid dates (e.g. 20250231 -> March 3),
-  // so we make sure month/day didn't roll.
-  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null;
-  return d;
+  // YYYY-MM-DD
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
+  const [y, m, d] = str.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return dt;
 }
 
 function sameWeek(d1, d2) {
-  // week = Sunday..Saturday containing d1
+  // Week = Sunday..Saturday containing d1 (Ireland rule)
   const start = new Date(d1);
-  start.setHours(0,0,0,0);
-  start.setDate(start.getDate() - start.getDay()); // back to Sunday
+  start.setUTCHours(0,0,0,0);
+  const day = start.getUTCDay(); // 0 = Sunday
+  start.setUTCDate(start.getUTCDate() - day);
   const end = new Date(start);
-  end.setDate(start.getDate() + 6);
+  end.setUTCDate(start.getUTCDate() + 6);
   return d2 >= start && d2 <= end;
 }
 
 function sameMonth(d1, d2) {
-  return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth();
+  return d1.getUTCFullYear() === d2.getUTCFullYear() &&
+         d1.getUTCMonth() === d2.getUTCMonth();
 }
 
 function determineOutcome({ location, shiftKey, phDayKey, phDateStr, willWork, replacementDateStr }) {
@@ -92,7 +88,7 @@ function determineOutcome({ location, shiftKey, phDayKey, phDateStr, willWork, r
   if (!phDayKey) errors.push("Select the day of the week for the public holiday.");
 
   const phDate = parseDate(phDateStr);
-  if (!phDate) errors.push("Enter a valid public holiday date in MMDDYYYY format.");
+  if (!phDate) errors.push("Enter a valid public holiday date in YYYY-MM-DD format.");
 
   if (errors.length) {
     return { errors };
@@ -102,8 +98,8 @@ function determineOutcome({ location, shiftKey, phDayKey, phDateStr, willWork, r
   const isWorkday = shift.work.includes(phDayKey);
   const isRestDay = !isWorkday;
 
-  // Optional sanity check: does date's weekday match selected weekday?
-  const actualDayKey = DAYS[phDate.getDay()].key;
+  // Sanity check between selected day-of-week and actual date
+  const actualDayKey = DAYS[phDate.getUTCDay()].key;
   if (actualDayKey !== phDayKey) {
     notes.push(
       `Warning: The date you entered (${phDateStr}) is a ${labelForDay(actualDayKey)}, ` +
@@ -112,67 +108,66 @@ function determineOutcome({ location, shiftKey, phDayKey, phDateStr, willWork, r
   }
 
   if (!isRestDay) {
-    // PH is on a normal workday
+    // Public holiday is on a normal working day
     if (willWork) {
       actions.push("Work the public holiday.");
-      actions.push("Bank this public holiday. You may use it anytime within the same calendar year (with manager confirmation).");
+      actions.push("Request to bank this public holiday for later use within the same calendar year (subject to approval).");
     } else {
-      actions.push("Take the public holiday off.");
-      notes.push("No replacement roster day is needed because the PH is on a working day.");
+      actions.push("Take the public holiday off as a non-working day.");
+      notes.push("No replacement rest day is required because the public holiday is on a working day.");
     }
-    return { errors: [], actions, notes };
+    return { errors: [], actions, notes, isWorkday, isRestDay };
   }
 
-  // PH falls on a rest day -> they must pick a replacement day
+  // PH falls on a rest day -> replacement is required
   if (!replacementDateStr) {
     return {
       errors: [
-        "Because the public holiday falls on your rest day, you must choose a replacement date in MMDDYYYY format."
+        "Because the public holiday falls on your rest day, you must enter a replacement date in YYYY-MM-DD format."
       ]
     };
   }
 
   const repDate = parseDate(replacementDateStr);
   if (!repDate) {
-    return { errors: ["Enter a valid replacement date in MMDDYYYY format."] };
+    return { errors: ["Enter a valid replacement date in YYYY-MM-DD format."] };
   }
 
   // Location-specific rules
   if (location === "Ireland" && !sameWeek(phDate, repDate)) {
     return {
-      errors: ["Replacement date must be within the same week (Sunday–Saturday) as the public holiday for Ireland."]
+      errors: ["For Ireland, the replacement date must be within the same week (Sunday–Saturday) as the public holiday."]
     };
   }
 
   if (location === "Taiwan" && !sameMonth(phDate, repDate)) {
     return {
-      errors: ["Replacement date must be within the same month as the public holiday for Taiwan."]
+      errors: ["For Taiwan, the replacement date must be within the same calendar month as the public holiday."]
     };
   }
 
-  // Check replacement is one of their working days
-  const repDayKey = DAYS[repDate.getDay()].key;
+  // Replacement must be a working day
+  const repDayKey = DAYS[repDate.getUTCDay()].key;
   if (!shift.work.includes(repDayKey)) {
     return {
       errors: [
-        `Replacement date must be one of your working days (${shift.work.map(labelForDay).join(", ")}).`
+        `Replacement date must be one of your normal working days (${shift.work.map(labelForDay).join(", ")}).`
       ]
     };
   }
 
   actions.push(
-    `Take ${replacementDateStr} as your replacement roster rest day (in place of the public holiday that fell on your rest day).`
+    "Request to take the chosen replacement date as a roster rest day in place of the public holiday (subject to approval)."
   );
-  actions.push("Inform your manager of this replacement date for tracking purposes.");
 
   if (willWork) {
-    actions.push("Work on the public holiday (even though it was your rest day).");
-    actions.push("Bank this public holiday for later use within the same calendar year (with manager confirmation).");
+    actions.push("Work on the public holiday (even though it is your roster rest day).");
+    actions.push("Request to bank the public holiday entitlement for later use within the same calendar year (subject to approval).");
   } else {
-    notes.push("You are not working on the public holiday; you are simply moving your rest day into the valid period.");
+    notes.push("You are not working on the public holiday; you are just moving your rest day into the valid period.");
   }
 
-  return { errors: [], actions, notes };
+  return { errors: [], actions, notes, isWorkday, isRestDay };
 }
 
 function Pill({ children }) {
@@ -197,26 +192,75 @@ function App() {
     [location, shiftKey, phDayKey, phDateStr, willWork, replacementDateStr]
   );
 
-  const { errors = [], actions = [], notes = [] } = outcome || {};
+  const { errors = [], actions = [], notes = [], isWorkday, isRestDay } = outcome || {};
+
+  // Build email-style request text (Option C)
+  const emailText = useMemo(() => {
+    if (!outcome || errors.length) return "";
+
+    const lines = [];
+    const phDay = labelForDay(phDayKey) || "-";
+
+    // Case: PH on rest day -> always a replacement request
+    if (isRestDay) {
+      lines.push("I am submitting a request for approval of a replacement rest day.");
+      lines.push("");
+      lines.push(`Public Holiday: ${phDateStr || "-"} (${phDay})`);
+      lines.push("Reason: The public holiday falls on my rostered rest day.");
+      lines.push(`Requested Replacement Rest Day: ${replacementDateStr || "-"} (pending approval).`);
+      lines.push("");
+      if (willWork) {
+        lines.push(
+          `I am also requesting approval to work the public holiday on ${phDateStr || "-"} ` +
+          "and bank this entitlement for later use within the current calendar year."
+        );
+      }
+      return lines.join("\n");
+    }
+
+    // Case: PH on workday and they choose to work & bank it
+    if (isWorkday && willWork) {
+      lines.push("I am submitting a request for approval to work on a public holiday and bank the entitlement.");
+      lines.push("");
+      lines.push(`Public Holiday: ${phDateStr || "-"} (${phDay})`);
+      lines.push(
+        "I am requesting approval to work this public holiday and bank the entitlement " +
+        "for later use within the current calendar year."
+      );
+      return lines.join("\n");
+    }
+
+    // PH on workday, not working -> nothing to approve, no email needed
+    lines.push("No approval request is required for this scenario. You are taking the public holiday as a normal non-working day.");
+    return lines.join("\n");
+  }, [outcome, errors.length, isWorkday, isRestDay, phDateStr, phDayKey, replacementDateStr, willWork]);
 
   const summaryText = useMemo(() => {
     if (!outcome || errors.length) return "";
     const parts = [];
+    if (emailText) {
+      parts.push(emailText);
+      parts.push("");
+      parts.push("----");
+      parts.push("");
+    }
     parts.push(`Location: ${location || "-"}`);
     parts.push(`Shift: ${shiftKey || "-"}`);
-    parts.push(`Public Holiday: ${labelForDay(phDayKey) || "-"} (${phDateStr || "-"})`);
-    parts.push(`Working on PH: ${willWork ? "Yes (banking)" : "No"}`);
+    parts.push(`Public Holiday: ${phDateStr || "-"} (${labelForDay(phDayKey) || "-"})`);
+    parts.push(`Working on PH: ${willWork ? "Yes (requesting to bank)" : "No"}`);
     if (replacementDateStr) {
       parts.push(`Replacement Date: ${replacementDateStr}`);
     }
-    parts.push("\nActions:");
+    parts.push("");
+    parts.push("Actions:");
     actions.forEach((a, i) => parts.push(`${i + 1}. ${a}`));
     if (notes.length) {
-      parts.push("\nNotes:");
+      parts.push("");
+      parts.push("Notes:");
       notes.forEach(n => parts.push(`- ${n}`));
     }
     return parts.join("\n");
-  }, [location, shiftKey, phDayKey, phDateStr, willWork, replacementDateStr, actions, notes, errors.length, outcome]);
+  }, [outcome, errors.length, emailText, location, shiftKey, phDateStr, phDayKey, willWork, replacementDateStr, actions, notes]);
 
   async function copySummary() {
     if (!summaryText) return;
@@ -281,16 +325,16 @@ function App() {
         </div>
 
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-medium">3) Public Holiday Date (MMDDYYYY)</h2>
+          <h2 className="text-sm font-medium">3) Public holiday date (YYYY-MM-DD)</h2>
           <input
             type="text"
             className="mt-2 w-full rounded-md border-gray-300 text-sm"
-            placeholder="MMDDYYYY"
+            placeholder="YYYY-MM-DD"
             value={phDateStr}
             onChange={e => setPhDateStr(e.target.value)}
           />
           <p className="mt-2 text-xs text-gray-600">
-            Example: 02172026 for 17 February 2026.
+            Example: 2026-02-17
           </p>
         </div>
 
@@ -325,12 +369,12 @@ function App() {
           <input
             type="text"
             className="mt-2 w-full rounded-md border-gray-300 text-sm"
-            placeholder="MMDDYYYY"
+            placeholder="YYYY-MM-DD"
             value={replacementDateStr}
             onChange={e => setReplacementDateStr(e.target.value)}
           />
           <p className="mt-2 text-xs text-gray-600">
-            Ireland: must be in the same week as the PH. Taiwan: must be in the same month.
+            Ireland: must be in the same week (Sun–Sat) as the PH. Taiwan: must be in the same month.
           </p>
         </div>
       </section>
@@ -354,6 +398,11 @@ function App() {
           </ul>
         ) : (
           <div className="mt-3 space-y-3">
+            {emailText && (
+              <div className="rounded-lg bg-gray-50 p-3 text-xs text-gray-800 whitespace-pre-line">
+                {emailText}
+              </div>
+            )}
             <ol className="list-decimal pl-5 text-sm">
               {actions.map((a, i) => (
                 <li key={i} className="mb-1">{a}</li>
@@ -380,6 +429,9 @@ function App() {
                 <span className="text-xs text-green-700">Copied.</span>
               )}
             </div>
+            <p className="mt-2 text-xs text-gray-600">
+              Please copy and paste the email-style text above into your request to your Team Lead.
+            </p>
           </div>
         )}
       </section>
