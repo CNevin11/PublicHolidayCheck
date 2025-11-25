@@ -142,10 +142,14 @@ function App(){
         </div>
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-sm font-medium">4) Replacement day (only if PH falls on your roster day off)</h2>
-          <select value={replacementDayKey} onChange={e=>setReplacementDayKey(e.target.value)} className="mt-2 w-full rounded-md border-gray-300 text-sm" disabled={!shiftKey||!phDayKey||(shiftKey&&phDayKey&&SHIFTS[shiftKey].work.includes(phDayKey))}>
-            <option value="">{!shiftKey||!phDayKey?"Choose shift & PH first…":SHIFTS[shiftKey].work.includes(phDayKey)?"Not needed (PH is a workday)":"Choose replacement day…"}</option>
-            {replacementChoices.map(d=><option key={d.key} value={d.key}>{d.label}</option>)}
-          </select>
+<input type="text" 
+  value={replacementDayKey} 
+  onChange={e=>setReplacementDayKey(e.target.value)} 
+  placeholder="MMDDYYYY" 
+  className="mt-2 w-full rounded-md border-gray-300 text-sm"
+  disabled={!shiftKey||!phDayKey||(shiftKey&&phDayKey&&SHIFTS[shiftKey].work.includes(phDayKey))}
+/>
+<p className="mt-2 text-xs text-gray-600">Enter replacement day in MMDDYYYY (must be within same month and one of your working days).</p>
         </div>
       </section>
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
