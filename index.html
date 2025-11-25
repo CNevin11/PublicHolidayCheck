@@ -128,20 +128,28 @@ function App(){
         </div>
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
           <h2 className="text-sm font-medium">2) Public holiday day</h2>
-          <select value={phDayKey} onChange={e=>setPhDayKey(e.target.value)} className="mt-2 w-full rounded-md border-gray-300 text-sm">
-            <option value="" disabled>Choose day…</option>
-            {DAYS.map(d=><option key={d.key} value={d.key}>{d.label}</option>)}
-          </select>
-        </div>
+<select value={phDayKey} onChange={e=>setPhDayKey(e.target.value)} className="mt-2 w-full rounded-md border-gray-300 text-sm">
+  <option value="" disabled>Choose day…</option>
+  {DAYS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+</select>
+</div>
+<div className="rounded-2xl border bg-white p-4 shadow-sm">
+<h2 className="text-sm font-medium">3) Public holiday date (MMDDYYYY)</h2>
+<input type="text"
+  value={phDate}
+  onChange={e=>setPhDate(e.target.value)}
+  placeholder="MMDDYYYY"
+  className="mt-2 w-full rounded-md border-gray-300 text-sm" />
+</div>
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-medium">3) Will you work on the public holiday?</h2>
+          <h2 className="text-sm font-medium">4) Will you work on the public holiday?</h2>
           <div className="mt-2 flex items-center gap-4 text-sm">
             <label className="inline-flex items-center gap-2"><input type="radio" name="willWork" checked={!willWork} onChange={()=>setWillWork(false)} />No</label>
             <label className="inline-flex items-center gap-2"><input type="radio" name="willWork" checked={willWork} onChange={()=>setWillWork(true)} />Yes, work & bank it</label>
           </div>
         </div>
         <div className="rounded-2xl border bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-medium">4) Replacement day (only if PH falls on your roster day off)</h2>
+          <h2 className="text-sm font-medium">5) Replacement day (only if PH falls on your roster day off)</h2>
 <input type="text" 
   value={replacementDayKey} 
   onChange={e=>setReplacementDayKey(e.target.value)} 
