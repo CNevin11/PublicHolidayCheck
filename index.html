@@ -62,13 +62,20 @@ function parseDate(str) {
 }
 
 function sameWeek(d1, d2) {
-  // Week = Sunday..Saturday containing d1 (Ireland rule)
+  // Week = Monday..Sunday containing d1 (Ireland rule)
   const start = new Date(d1);
-  start.setUTCHours(0,0,0,0);
-  const day = start.getUTCDay(); // 0 = Sunday
-  start.setUTCDate(start.getUTCDate() - day);
+  start.setUTCHours(0, 0, 0, 0);
+
+  let day = start.getUTCDay(); // 0 = Sunday
+  if (day === 0) day = 7; // treat Sunday as 7
+
+  // Move back to Monday
+  start.setUTCDate(start.getUTCDate() - (day - 1));
+
+  // End of week = Sunday
   const end = new Date(start);
   end.setUTCDate(start.getUTCDate() + 6);
+
   return d2 >= start && d2 <= end;
 }
 
@@ -135,7 +142,7 @@ function determineOutcome({ location, shiftKey, phDayKey, phDateStr, willWork, r
   // Location-specific rules
   if (location === "Ireland" && !sameWeek(phDate, repDate)) {
     return {
-      errors: ["For Ireland, the replacement date must be within the same week (Sunday–Saturday) as the public holiday."]
+      errors: ["For Ireland, the replacement date must be within the same week (Monday–Sunday) as the public holiday."]
     };
   }
 
@@ -373,7 +380,7 @@ function App() {
             onChange={e => setReplacementDateStr(e.target.value)}
           />
           <p className="mt-2 text-xs text-gray-600">
-            Ireland: must be in the same week (Sun–Sat) as the PH. Taiwan: must be in the same month.
+            Ireland: must be in the same week (Mon–Sun) as the PH. Taiwan: must be in the same month.
           </p>
         </div>
       </section>
